@@ -1,11 +1,19 @@
 import inspect
-import json
 import random
 import string
 import types
 
-from .base import BaseProtocol
+try:
+    import ujson as json
+except ImportError:
+    try:
+        import simplejson as json
+    except ImportError:
+        import json
+
+from .._compat import range_type, string_types
 from ..exceptions import WebSocketError
+from .base import BaseProtocol
 
 
 def export_rpc(arg=None):
@@ -124,7 +132,7 @@ class WampProtocol(BaseProtocol):
         self.prefixes = Prefixes()
         self.session_id = ''.join(
             [random.choice(string.digits + string.letters)
-                for i in xrange(16)])
+                for i in range_type(16)])
 
         super(WampProtocol, self).__init__(*args, **kwargs)
 
@@ -151,13 +159,19 @@ class WampProtocol(BaseProtocol):
         ]
         self.app.ws.send(serialize(welcome))
 
+    def _get_exception_info(self, e):
+        uri = 'http://TODO#generic'
+        desc = str(type(e))
+        details = str(e)
+        return [uri, desc, details]
+
     def rpc_call(self, data):
         call_id, curie_or_uri = data[1:3]
         args = data[3:]
 
-        if not isinstance(call_id, (str, unicode)):
+        if not isinstance(call_id, string_types):
             raise Exception()
-        if not isinstance(curie_or_uri, (str, unicode)):
+        if not isinstance(curie_or_uri, string_types):
             raise Exception()
 
         uri = self.prefixes.resolve(curie_or_uri)
@@ -165,10 +179,9 @@ class WampProtocol(BaseProtocol):
         try:
             result = self.procedures.call(uri, args)
             result_msg = [self.MSG_CALL_RESULT, call_id, result]
-        except Exception, e:
+        except Exception as e:
             result_msg = [self.MSG_CALL_ERROR,
-                          call_id, 'http://TODO#generic',
-                          str(type(e)), str(e)]
+                          call_id] + self._get_exception_info(e)
 
         self.app.on_message(serialize(result_msg))
 
@@ -178,7 +191,7 @@ class WampProtocol(BaseProtocol):
 
         if not isinstance(action, int):
             raise Exception()
-        if not isinstance(curie_or_uri, (str, unicode)):
+        if not isinstance(curie_or_uri, string_types):
             raise Exception()
 
         uri = self.prefixes.resolve(curie_or_uri)
